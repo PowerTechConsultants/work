@@ -349,7 +349,7 @@ export class AttendanceService {
 
   static async update(id: string, input: any) {
     if (!await db.prepare('SELECT id FROM attendance WHERE id = ?').get(id)) throw new AppError(404, 'Record not found');
-    const sets: string[] = ["updated_at = datetime('now')"]; const params: any[] = [];
+    const sets: string[] = ["updated_at = NOW()"]; const params: any[] = [];
     if (input.status) { sets.push('status = ?'); params.push(input.status); }
     if (input.loginTime) { sets.push('login_time = ?'); params.push(input.loginTime); }
     if (input.logoutTime) { sets.push('logout_time = ?'); params.push(input.logoutTime); }

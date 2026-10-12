@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { getAccessToken, doRefresh } from './api';
+import { getAccessToken } from './tokenStore';
 
 let socket: Socket | null = null;
 let currentToken: string | null = null;
@@ -14,17 +14,32 @@ const isJwtExpired = (token: string) => {
   }
 };
 
-import { getEnv, isProduction } from './env';
+import { getEnv } from './env';
+
+// The app runs on a single origin (Express serves API + frontend on 42780), so the
+// socket should normally connect to whatever host serves the page. Only when the
+// page is served by the Vite dev server (a different port) do we need to point at
+// the dev API port from VITE_API_PORT.
+const DEV_API_PORT = '42781';
+
+export const resolveSocketUrl = (): string => {
+  const explicit = getEnv('VITE_API_URL') ?? getEnv('NEXT_PUBLIC_API_URL');
+  if (explicit) return explicit.replace(/\/$/, '');
+
+  if (typeof window !== 'undefined' && window.location) {
+    const { origin, hostname, port, protocol } = window.location;
+    const isDevServer = port === '42780' && hostname !== '';
+    // Vite dev server (port 42780) proxies nothing for sockets → talk to the dev API.
+    if (isDevServer && import.meta.env?.DEV) {
+      return `${protocol}//${hostname}:${DEV_API_PORT}`;
+    }
+    return origin;
+  }
+  return `http://localhost:42780`;
+};
 
 export const initializeSocket = (token: string) => {
-  const API_URL =
-    getEnv('VITE_API_URL') ??
-    getEnv('NEXT_PUBLIC_API_URL') ??
-    (typeof window !== 'undefined'
-      ? (isProduction()
-        ? window.location.origin
-        : `${window.location.protocol}//${window.location.hostname}:4001`)
-      : 'http://localhost:4001');
+  const API_URL = resolveSocketUrl();
 
   if (socket && (currentToken !== token || socketUrl !== API_URL)) {
     socket.close();
@@ -42,6 +57,10 @@ export const initializeSocket = (token: string) => {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 10000,
       randomizationFactor: 0.5,
+      // Must stay in step with the server heartbeat (server/src/lib/socket.ts).
+      // A short timeout drops healthy sockets when the tab is throttled or the PC sleeps.
+      pingInterval: 25000,
+      pingTimeout: 45000,
     });
 
     socket.on('connect', () => {
@@ -66,10 +85,10 @@ export const initializeSocket = (token: string) => {
         return;
       }
       if (isJwtExpired(fresh)) {
-        doRefresh()
+        import('./api').then(m => m.doRefresh())
           .then((newToken) => {
             if (socket && newToken !== currentToken) {
-              currentToken = newToken;
+              currentToken = newToken as string;
               socket.auth = { token: newToken };
             }
           })

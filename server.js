@@ -6,6 +6,10 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 const candidates = [
   path.join(here, 'dist', 'server.js'),
+  path.join(here, 'dist', 'src', 'server.js'),
+  path.join(here, 'release', 'server.js'),
+  path.join(here, 'release', 'src', 'server.js'),
+  path.join(here, 'server', 'dist', 'server.js'),
   path.join(here, 'server', 'dist', 'src', 'server.js'),
 ];
 

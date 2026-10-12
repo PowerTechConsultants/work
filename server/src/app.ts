@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import crypto from 'crypto';
 import { compressMiddleware } from './middleware/compress.js';
 import { requestTimeout } from './lib/timeout.js';
+import { requestShutdown } from './lib/shutdown.js';
 import { concurrencyLimiter } from './lib/concurrency-limiter.js';
 import { auditLog } from './middleware/audit-log.js';
 import rateLimit from 'express-rate-limit';
@@ -121,6 +122,24 @@ export function createApp() {
     });
   });
 
+  // Graceful local stop, used by STOP.bat. Disabled unless STOP_TOKEN is set (the
+  // desktop launcher writes a random token per run and passes it to the child).
+  const stopToken = process.env.STOP_TOKEN;
+  if (stopToken) {
+    app.post('/internal/stop', (req: express.Request, res: express.Response) => {
+      const provided = req.get('x-stop-token') || (req.body && req.body.token);
+      if (provided !== stopToken) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+      }
+      res.json({ status: 'stopping' });
+      // Reuse the graceful shutdown path in server.ts; the unref'd timer is a safety net.
+      const safety = setTimeout(() => process.exit(0), 8000);
+      safety.unref();
+      setTimeout(() => { void requestShutdown('stop endpoint'); }, 100);
+    });
+  }
+
   // Readiness probe - checks if database is accessible
   app.get('/ready', async (_req, res) => {
     try {
@@ -211,14 +230,26 @@ export function createApp() {
     app.use('/api-docs', basicAuth, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
   }
 
-  // Hostinger Shared: serve web static export via single server process
-  if (process.env.HOSTINGER === 'true' || config.nodeEnv === 'production') {
+  // Single-origin: serve web static export via Express (Hostinger legacy, Docker Tunnel, or any production)
+  if (process.env.HOSTINGER === 'true' || process.env.SERVE_STATIC === 'true' || config.nodeEnv === 'production') {
     try {
       const webOutCandidates = [
+        path.resolve(process.cwd(), 'web', 'dist'),
         path.resolve(process.cwd(), 'web', 'out'),
+        path.resolve(process.cwd(), '..', 'web', 'dist'),
         path.resolve(process.cwd(), '..', 'web', 'out'),
+        path.resolve(process.cwd(), 'dist', 'web', 'dist'),
+        path.resolve(process.cwd(), 'dist', 'web', 'out'),
+        path.resolve(process.cwd(), 'release', 'web', 'dist'),
+        path.resolve(process.cwd(), 'release', 'web', 'out'),
+        path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist'),
         path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/out'),
+        path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../web/dist'),
         path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../web/out'),
+        path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web/dist'),
+        path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web/out'),
+        path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../dist/web/dist'),
+        path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../release/web/dist'),
       ];
       const webOut = webOutCandidates.find((candidate) => fs.existsSync(candidate));
       if (webOut) {

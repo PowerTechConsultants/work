@@ -1,0 +1,18 @@
+# Alternative to TUNNEL_TOKEN: config-file based tunnel.
+# Use this if you use `cloudflared tunnel create <name>` locally and copy credentials.
+# Mount as ./cloudflared/config.yml in docker-compose.yml.
+
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  # Single-origin: Express serves API (/api/*) + static frontend (/*) on :42780
+  - hostname: power-tech.group
+    service: http://server:42780
+    originRequest:
+      noTLSVerify: true
+  - hostname: "*.power-tech.group"
+    service: http://server:42780
+    originRequest:
+      noTLSVerify: true
+  - service: http_status:404

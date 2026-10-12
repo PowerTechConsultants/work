@@ -5,10 +5,15 @@ on:
     - cron: '30 2 * * *'
   workflow_dispatch:
 
+concurrency:
+  group: nightly-load
+  cancel-in-progress: true
+
 jobs:
   load:
     name: Artillery load tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     services:
       mysql:
@@ -23,10 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use Node.js 24
+      - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -72,7 +77,7 @@ jobs:
         run: |
           MYSQL_DATABASE=hr_test DATABASE_URL= nohup npx tsx src/server.ts > /tmp/server.log 2>&1 &
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:4001/health >/dev/null 2>&1; then
+            if curl -sf http://localhost:42780/health >/dev/null 2>&1; then
               echo "Server is up"
               break
             fi
@@ -89,8 +94,8 @@ jobs:
 
       - name: Run artillery load tests
         run: |
-          npx -y artillery@latest run server/load-tests/auth-load-test.yml
-          npx -y artillery@latest run server/load-tests/tasks-load-test.yml
+          npx -y artillery@2.0.26 run server/load-tests/auth-load-test.yml
+          npx -y artillery@2.0.26 run server/load-tests/tasks-load-test.yml
 
   e2e:
     name: Playwright E2E
@@ -109,10 +114,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use Node.js 24
+      - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
 
       - name: Install dependencies

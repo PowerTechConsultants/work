@@ -104,7 +104,7 @@ async function markAbsentForDay(date: string, skipUserIds: string[]) {
       for (const user of chunk) {
         params.push(uuid(), user.id, date, 'absent', null, now, now);
       }
-      await db.prepare(`INSERT OR IGNORE INTO attendance (id, user_id, date, status, notes, created_at, updated_at) VALUES ${placeholders}`).run(...params);
+      await db.prepare(`INSERT IGNORE INTO attendance (id, user_id, date, status, notes, created_at, updated_at) VALUES ${placeholders}`).run(...params);
     }
   });
   await insertBatch();

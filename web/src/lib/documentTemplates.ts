@@ -17,11 +17,10 @@ import {
 } from 'docx';
 import {
   SWAIN_SIGNATURE_B64,
-  SWAIN_SIGNATURE_RAW_B64,
   SWAIN_BLUE_SIG_B64,
-  SWAIN_BLUE_SIG_RAW_B64,
 } from './appointmentAssets';
-import { POWERTECH_LOGO_B64, POWERTECH_LOGO_RAW_B64, POWERTECH_LOGO_ASPECT } from './powertechAssets';
+import { POWERTECH_LOGO_B64, POWERTECH_LOGO_ASPECT } from './powertechAssets';
+const b64Raw = (s: string) => s.includes(',') ? s.slice(s.indexOf(',')+1) : s;
 import { COMPANY_CONFIG, COLORS } from './companyConfig';
 import { getDocumentConfig, type DocumentTypeConfig } from './documentTypeConfig';
 
@@ -1624,7 +1623,7 @@ function docxSignature(issuedBy?: string | null): Paragraph[] {
 }
 
 function docxSwainHeaderTable(docConfig: DocumentTypeConfig, opts: { accreditation?: boolean; expPhone?: boolean; expEmail?: boolean } = {}): Table {
-  const logoBytes = Uint8Array.from(atob(POWERTECH_LOGO_RAW_B64), (c) => c.charCodeAt(0));
+  const logoBytes = Uint8Array.from(atob(b64Raw(POWERTECH_LOGO_B64)), (c) => c.charCodeAt(0));
   const NO_BORDERS = {
     top: { style: BorderStyle.NONE, size: 0, color: 'auto' },
     bottom: { style: BorderStyle.NONE, size: 0, color: 'auto' },
@@ -1684,7 +1683,7 @@ function docxSwainFooter(): Paragraph[] {
 // Custom Swain & Sons Word Renderers
 function docxAppointmentLetter(f: Record<string, unknown>, docNumber: string, issueDate: string): (Paragraph | Table)[] {
   const docConfig = getDocxDocumentConfig('appointment_letter');
-  const sigBytes = Uint8Array.from(atob(SWAIN_SIGNATURE_RAW_B64), (c) => c.charCodeAt(0));
+  const sigBytes = Uint8Array.from(atob(b64Raw(SWAIN_SIGNATURE_B64)), (c) => c.charCodeAt(0));
   
   // Get appropriate manager title based on document type
   const managerTitle = docConfig.managerTitle === 'manager' 
@@ -1825,7 +1824,7 @@ function docxAppointmentLetter(f: Record<string, unknown>, docNumber: string, is
 
 function docxLeavingCertificate(f: Record<string, unknown>, docNumber: string, issueDate: string): (Paragraph | Table)[] {
   const docConfig = getDocxDocumentConfig('leaving_certificate');
-  const blueSigBytes = Uint8Array.from(atob(SWAIN_BLUE_SIG_RAW_B64), (c) => c.charCodeAt(0));
+  const blueSigBytes = Uint8Array.from(atob(b64Raw(SWAIN_BLUE_SIG_B64)), (c) => c.charCodeAt(0));
   
   // Get appropriate manager title based on document type
   const managerTitle = docConfig.managerTitle === 'manager' 
@@ -1926,7 +1925,7 @@ function docxLeavingCertificate(f: Record<string, unknown>, docNumber: string, i
 
 function docxExperienceCertificate(f: Record<string, unknown>, docNumber: string, issueDate: string): (Paragraph | Table)[] {
   const docConfig = getDocxDocumentConfig('experience_certificate');
-  const blueSigBytes = Uint8Array.from(atob(SWAIN_BLUE_SIG_RAW_B64), (c) => c.charCodeAt(0));
+  const blueSigBytes = Uint8Array.from(atob(b64Raw(SWAIN_BLUE_SIG_B64)), (c) => c.charCodeAt(0));
   
   // Get appropriate manager title based on document type
   const managerTitle = docConfig.managerTitle === 'manager' 
@@ -1991,7 +1990,7 @@ function docxExperienceCertificate(f: Record<string, unknown>, docNumber: string
 
 function docxInternshipCertificate(f: Record<string, unknown>, docNumber: string, issueDate: string): (Paragraph | Table)[] {
   const docConfig = getDocxDocumentConfig('internship_certificate');
-  const sigBytes = Uint8Array.from(atob(SWAIN_SIGNATURE_RAW_B64), (c) => c.charCodeAt(0));
+  const sigBytes = Uint8Array.from(atob(b64Raw(SWAIN_SIGNATURE_B64)), (c) => c.charCodeAt(0));
   
   // Get appropriate manager title based on document type
   const managerTitle = docConfig.managerTitle === 'manager' 

@@ -16,7 +16,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 const COOKIE_OPTS = {
   httpOnly: true,
-  sameSite: 'lax' as const,
+  sameSite: 'strict' as const,
   secure: isProduction,
   path: '/api/v1/auth',
   maxAge: 30 * 24 * 60 * 60 * 1000,
@@ -24,7 +24,7 @@ const COOKIE_OPTS = {
 
 const ACCESS_COOKIE_OPTS = {
   httpOnly: true,
-  sameSite: 'lax' as const,
+  sameSite: 'strict' as const,
   secure: isProduction,
   path: '/',
   maxAge: 15 * 60 * 1000,
@@ -82,8 +82,8 @@ router.post('/refresh', refreshLimiter, async (req: Request, res: Response, next
     res.cookie('refreshToken', result.refreshToken, COOKIE_OPTS);
     res.json({ accessToken: result.accessToken });
   } catch (err) {
-    res.clearCookie('refreshToken', { path: '/api/v1/auth', httpOnly: true, sameSite: 'lax', secure: isProduction });
-    res.clearCookie('accessToken', { path: '/', httpOnly: true, sameSite: 'lax', secure: isProduction });
+    res.clearCookie('refreshToken', { path: '/api/v1/auth', httpOnly: true, sameSite: 'strict', secure: isProduction });
+    res.clearCookie('accessToken', { path: '/', httpOnly: true, sameSite: 'strict', secure: isProduction });
     next(err);
   }
 });
@@ -94,8 +94,8 @@ router.post('/logout', async (req: Request, res: Response, next) => {
     if (refreshToken) {
       try { await AuthService.logout(refreshToken); } catch (e) { /* token already invalid, still clear cookies */ }
     }
-    res.clearCookie('refreshToken', { path: '/api/v1/auth', httpOnly: true, sameSite: 'lax', secure: isProduction });
-    res.clearCookie('accessToken', { path: '/', httpOnly: true, sameSite: 'lax', secure: isProduction });
+    res.clearCookie('refreshToken', { path: '/api/v1/auth', httpOnly: true, sameSite: 'strict', secure: isProduction });
+    res.clearCookie('accessToken', { path: '/', httpOnly: true, sameSite: 'strict', secure: isProduction });
     res.json({ message: 'Logged out' });
   } catch (err) { next(err); }
 });
@@ -106,8 +106,8 @@ router.post('/change-password', authenticate, validate(changePasswordSchema), as
     try { await ActivityLogsService.create(req.user!.sub, 'change_password', 'auth', req.user!.sub, undefined, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     const rt = req.cookies?.refreshToken;
     if (rt) await AuthService.logout(rt);
-    res.clearCookie('refreshToken', { path: '/api/v1/auth', httpOnly: true, sameSite: 'lax', secure: isProduction });
-    res.clearCookie('accessToken', { path: '/', httpOnly: true, sameSite: 'lax', secure: isProduction });
+    res.clearCookie('refreshToken', { path: '/api/v1/auth', httpOnly: true, sameSite: 'strict', secure: isProduction });
+    res.clearCookie('accessToken', { path: '/', httpOnly: true, sameSite: 'strict', secure: isProduction });
     res.json({ message: 'Password changed' });
   } catch (err) { next(err); }
 });

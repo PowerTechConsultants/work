@@ -6,10 +6,25 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   server:
     name: Server
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: hr_test
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping -h localhost -u root -proot" --health-interval=10s --health-timeout=5s --health-retries=5
 
     steps:
       - uses: actions/checkout@v4
@@ -32,18 +47,33 @@ jobs:
       - name: Build (server)
         run: npm run build -w server
 
-      - name: Setup test database (SQLite)
-        run: npm run setup -w server
+      - name: Run tests with coverage (server)
+        run: npm run test:coverage -w server
         env:
+          # The test harness (server/src/test/test-db.ts) reads these; it always uses
+          # the hr_test database and never the development one.
+          TEST_DB_HOST: 127.0.0.1
+          TEST_DB_PORT: '3306'
+          TEST_DB_USER: root
+          TEST_DB_PASSWORD: root
+          TEST_DB_NAME: hr_test
+          JWT_ACCESS_SECRET: test-access-secret-32chars-min-abc123XYZ!
+          JWT_REFRESH_SECRET: test-refresh-secret-32chars-min-xyz789ABC!
           ADMIN_EMAIL: test@example.com
           ADMIN_PASSWORD: TestPassword123!
 
-      - name: Run tests (server)
-        run: npm test -w server
+      - name: Upload server coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-coverage
+          path: server/coverage
+          retention-days: 7
 
   web:
     name: Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -66,5 +96,24 @@ jobs:
       - name: Build (web)
         run: npm run build -w web
 
-      - name: Run tests (web)
-        run: npm test -w web
+      - name: Run tests with coverage (web)
+        run: npm run test:coverage -w web
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build server image (server + web single-origin)
+        run: docker build -f server/Dockerfile -t worktracker-server:ci .
+
+      - name: Verify image health contract
+        run: |
+          docker inspect worktracker-server:ci --format '{{json .Config.Healthcheck}}' | grep -q 'ready' \
+            || (echo 'HEALTHCHECK missing or not probing /ready' && exit 1)
+
+      - name: Build web image
+        run: docker build -f web/Dockerfile -t worktracker-web:ci ./web

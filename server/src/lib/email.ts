@@ -54,7 +54,7 @@ async function logEmail(recipientId: string | null, recipientEmail: string, subj
 export async function sendWelcomeEmail(user: { id: string; email: string; firstName: string; lastName: string }) {
   if (!isEmailConfigured()) return;
   const subject = 'Welcome to Employee Work Tracker';
-  const base = process.env.APP_URL ?? 'http://localhost:3000';
+  const base = process.env.APP_URL ?? 'http://localhost:42780';
   const html = `<h2>Welcome, ${escapeHtml(user.firstName)} ${escapeHtml(user.lastName)}!</h2><p>Your account has been created. You can log in at <a href="${base}/login">${base}/login</a>.</p>`;
   const ok = await sendEmail(user.email, subject, html);
   await logEmail(user.id, user.email, subject, ok ? 'sent' : 'failed');
@@ -62,7 +62,7 @@ export async function sendWelcomeEmail(user: { id: string; email: string; firstN
 
 export async function sendPasswordResetEmail(to: string, resetToken: string): Promise<boolean> {
   if (!isEmailConfigured()) return false;
-  const base = process.env.APP_URL ?? 'http://localhost:3000';
+  const base = process.env.APP_URL ?? 'http://localhost:42780';
   const resetLink = `${base}/reset-password?token=${resetToken}`;
   const subject = 'Password Reset Request';
   const html = `<h2>Password Reset</h2><p>You requested a password reset. Click the link below to set a new password:</p><p><a href="${resetLink}">${resetLink}</a></p><p>If you did not request this, you can safely ignore this email.</p>`;
@@ -89,7 +89,7 @@ export async function sendLeaveNotification(leave: { id: string; type: string; s
 
 export async function sendTaskAssignment(task: { id: string; title: string }, assignee: { id: string; email: string; firstName: string; lastName: string }) {
   if (!isEmailConfigured()) return;
-  const base = process.env.APP_URL ?? 'http://localhost:3000';
+  const base = process.env.APP_URL ?? 'http://localhost:42780';
   const subject = 'New Task Assigned';
   const html = `<h2>Task Assigned</h2><p>Hi ${escapeHtml(assignee.firstName)},</p><p>You have been assigned a new task: <strong>${escapeHtml(task.title)}</strong>.</p><p><a href="${base}/tasks/${task.id}">View Task</a></p>`;
   const ok = await sendEmail(assignee.email, subject, html);
@@ -98,7 +98,7 @@ export async function sendTaskAssignment(task: { id: string; title: string }, as
 
 export async function sendDocumentReady(document: { id: string; docType: string; docNumber?: string }, requester: { id: string; email: string; firstName: string; lastName: string }) {
   if (!isEmailConfigured()) return;
-  const base = process.env.APP_URL ?? 'http://localhost:3000';
+  const base = process.env.APP_URL ?? 'http://localhost:42780';
   const subject = 'Document Ready for Download';
   const html = `<h2>Document Ready</h2><p>Hi ${escapeHtml(requester.firstName)},</p><p>Your ${escapeHtml(document.docType.replace(/_/g, ' '))} ${document.docNumber ? `(${escapeHtml(document.docNumber)})` : ''} is ready to download.</p><p><a href="${base}/documents">View Documents</a></p>`;
   const ok = await sendEmail(requester.email, subject, html);

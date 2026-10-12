@@ -9,14 +9,14 @@ function env(name: string, fallback?: string): string {
 
 export function parseCorsOrigins(value: string): string[] {
   const trimmed = value.trim();
-  if (!trimmed) return ['http://localhost:3000', 'http://localhost:3001'];
+  if (!trimmed) return ['http://localhost:42780'];
   return trimmed.split(',').map((entry) => entry.trim()).filter(Boolean);
 }
 
 export const config = {
   nodeEnv: env('NODE_ENV', 'development'),
-  port: Number(env('API_PORT', env('PORT', '4001'))),
-  corsOrigin: parseCorsOrigins(env('CORS_ORIGIN', 'http://localhost:3000, http://localhost:3001')),
+  port: Number(env('API_PORT', env('PORT', '42780'))),
+  corsOrigin: parseCorsOrigins(env('CORS_ORIGIN', 'http://localhost:42780')),
   jwtAccessSecret: env('JWT_ACCESS_SECRET', 'dev-access-secret-change-in-production'),
   jwtRefreshSecret: env('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-in-production'),
   jwtAccessTtl: env('JWT_ACCESS_TTL', '15m'),
@@ -24,10 +24,14 @@ export const config = {
   maxLoginAttempts: Number(env('MAX_LOGIN_ATTEMPTS', '5')),
   lockoutMinutes: Number(env('LOCKOUT_MINUTES', '15')),
   uploadDir: env('UPLOAD_DIR', 'uploads'),
-  // SQLite file database (always outside dist/ so rebuilds never wipe data).
-  // Local dev (cwd=server/): server/data.db ; production (cwd=root): ./data.db.
-  // Override with SQLITE_PATH (absolute, e.g. /home/uXXXX/data/employee.db).
-  sqlitePath: process.env.SQLITE_PATH || process.env.DATABASE_PATH || './data.db',
+  // MySQL database configuration
+  db: {
+    host: process.env.MYSQL_HOST || 'localhost',
+    port: Number(process.env.MYSQL_PORT) || 3306,
+    user: process.env.MYSQL_USER || 'root',
+    password: process.env.MYSQL_PASSWORD || '',
+    database: process.env.MYSQL_DATABASE || 'hr',
+  },
   cookieSecure: env('COOKIE_SECURE', (process.env.NODE_ENV === 'production').toString()) === 'true',
   adminPassword: env('ADMIN_PASSWORD', 'Admin@123456'),
   smtp: {
@@ -50,10 +54,13 @@ if (config.nodeEnv === 'production') {
     'dev-refresh-secret-change-in-production',
     'change_me_access',
     'change_me_refresh',
+    'change_me_access_32_chars_min__________________',
+    'change_me_refresh_32_chars_min_________________',
     'local-dev-access-secret-32chars-min-abc123XYZ',
     'local-dev-refresh-secret-32chars-min-xyz789ABC',
   ];
-  const hasWeak = blockedSecrets.includes(config.jwtAccessSecret) || blockedSecrets.includes(config.jwtRefreshSecret);
+  const weakPattern = /change_me|example|32_chars/i;
+  const hasWeak = blockedSecrets.includes(config.jwtAccessSecret) || blockedSecrets.includes(config.jwtRefreshSecret) || weakPattern.test(config.jwtAccessSecret) || weakPattern.test(config.jwtRefreshSecret);
   const tooShort = config.jwtAccessSecret.length < 32 || config.jwtRefreshSecret.length < 32;
   if (hasWeak || tooShort) {
     throw new Error('[CONFIG] FATAL: JWT secrets must be unique, at least 32 characters, and not default/example values. Set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET env vars.');

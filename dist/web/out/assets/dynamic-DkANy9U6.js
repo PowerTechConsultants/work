@@ -1,1 +1,0 @@
-import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./jsx-runtime-BpzPEenQ.js";var r=e(t(),1),i=n();function a(e,...t){let n=(0,r.lazy)(()=>e().then(e=>`default`in e?e:{default:e}));return function(e){return(0,i.jsx)(r.Suspense,{fallback:null,children:(0,i.jsx)(n,{...e})})}}export{a as t};

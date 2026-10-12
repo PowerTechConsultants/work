@@ -1,29 +1,25 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Force the isolated hr_test SQLite file (never the dev data.db).
-import path from 'path';
-process.env.DATABASE_URL = '';
-process.env.SQLITE_PATH = path.join(process.cwd(), 'hr_test.db');
+// Seeds a known director for Playwright E2E runs (hr_test only).
+import bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
+import { resolveTestDbConfig } from './test-db.js';
+
+// Safe by design: the test resolver refuses anything but a test database, so this can
+// never seed the development/production database even when DATABASE_URL is unset.
+const cfg = resolveTestDbConfig();
+if (!/test/i.test(cfg.database)) {
+  console.error(`[E2ESeed] Refusing to seed non-test database: "${cfg.database}".`);
+  process.exit(1);
+}
+
+const EMAIL = process.env.E2E_ADMIN_EMAIL || 'e2e-director@example.com';
+const PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'E2ePassword123!';
 
 const dbModule = await import('../db/index.js');
 const db = dbModule.default as any;
 const pool = dbModule.pool as any;
-
-import bcrypt from 'bcryptjs';
-import { randomUUID } from 'crypto';
-
-// Seeds a known director for Playwright E2E runs (hr_test only).
-// Usage: npx tsx src/test/e2e-seed.ts
-// Safe by design: refuses to run against any other database file.
-const usingDb = process.env.SQLITE_PATH || '';
-if (!usingDb.includes('hr_test')) {
-  console.error(`[E2ESeed] Refusing to seed non-test database: "${usingDb}".`);
-  process.exit(1);
-}
-
-const EMAIL = 'e2e-director@example.com';
-const PASSWORD = 'E2ePassword123!';
 
 const existing = (await db.prepare('SELECT id FROM users WHERE email = ?').get(EMAIL)) as any;
 if (!existing) {

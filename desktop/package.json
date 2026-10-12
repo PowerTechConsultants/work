@@ -1,0 +1,20 @@
+{
+  "name": "worktracker-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "dev:launcher": "node launcher.js",
+    "start": "node launcher.cjs",
+    "shortcut": "powershell -ExecutionPolicy Bypass -File create-startup.ps1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.2.0"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.2.0",
+    "open": "^10.1.0"
+  }
+}

@@ -1,6 +1,6 @@
 import db, { uuid } from '../../db/index.js';
 import { getIO } from '../../lib/socket.js';
-import { getISTDate, isSundayIST, parseUTC } from '../../lib/time.js';
+import { getISTDate, getISTYear, isSundayIST, parseUTC } from '../../lib/time.js';
 import { cache } from '../../lib/cache.js';
 import { AppError } from '../../lib/app-error.js';
 import { sendLeaveNotification, isEmailConfigured } from '../../lib/email.js';
@@ -50,10 +50,21 @@ function mapLeave(l: any) {
   };
 }
 
-function iterDates(start: string, end: string): string[] {
+function dateOnly(value: string | Date): string {
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return '';
+    return value.toISOString().slice(0, 10);
+  }
+  return String(value ?? '').slice(0, 10);
+}
+
+function iterDates(start: string | Date, end: string | Date): string[] {
   const dates: string[] = [];
-  const cur = new Date(`${start}T00:00:00Z`);
-  const endD = new Date(`${end}T00:00:00Z`);
+  const startIso = dateOnly(start);
+  const endIso = dateOnly(end);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startIso) || !/^\d{4}-\d{2}-\d{2}$/.test(endIso)) return dates;
+  const cur = new Date(`${startIso}T00:00:00Z`);
+  const endD = new Date(`${endIso}T00:00:00Z`);
   while (cur <= endD) {
     dates.push(cur.toISOString().split('T')[0]!);
     cur.setUTCDate(cur.getUTCDate() + 1);
@@ -113,8 +124,10 @@ async function workingDates(userId: string, start: string, end: string): Promise
   return dates;
 }
 
-function yearOf(date: string): number {
-  return new Date(`${date}T00:00:00Z`).getUTCFullYear();
+function yearOf(date: string | Date): number {
+  const iso = dateOnly(date);
+  const year = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T00:00:00Z`).getUTCFullYear() : NaN;
+  return Number.isNaN(year) ? getISTYear() : year;
 }
 
 async function daysWithinYear(userId: string, start: string, end: string, year: number, holidayCache?: Map<string, any[]>): Promise<number> {
@@ -233,7 +246,7 @@ export class LeavesService {
           params.push(notes);
           await db.prepare(`INSERT INTO attendance (id, user_id, date, status, notes)
             VALUES ${placeholders}
-            ON CONFLICT(user_id, date) DO UPDATE SET status = CASE WHEN attendance.status IN ${PROTECTED_STATUSES} THEN attendance.status ELSE 'leave' END, notes = CASE WHEN attendance.status IN ${PROTECTED_STATUSES} THEN attendance.notes ELSE ? END, updated_at = datetime('now')`).run(...params);
+            ON DUPLICATE KEY UPDATE status = CASE WHEN attendance.status IN ${PROTECTED_STATUSES} THEN attendance.status ELSE 'leave' END, notes = CASE WHEN attendance.status IN ${PROTECTED_STATUSES} THEN attendance.notes ELSE ? END, updated_at = NOW()`).run(...params);
         }
         invalidateAnalyticsCache();
 
@@ -395,7 +408,7 @@ export class LeavesService {
         leaveYear = yearOf(leave.start_date);
         extra = await computeRequestExtra(leave.user_id, leaveYear, dates.length);
       }
-      await db.prepare("UPDATE leaves SET status = ?, review_comment = ?, reviewed_by_id = ?, reviewed_at = datetime('now'), leave_year = COALESCE(?, leave_year), extra = CASE WHEN ? = 'approved' THEN ? ELSE extra END, updated_at = datetime('now') WHERE id = ?")
+      await db.prepare("UPDATE leaves SET status = ?, review_comment = ?, reviewed_by_id = ?, reviewed_at = NOW(), leave_year = COALESCE(?, leave_year), extra = CASE WHEN ? = 'approved' THEN ? ELSE extra END, updated_at = NOW() WHERE id = ?")
         .run(status, comments ?? null, reviewedById, leaveYear, status, extra, id);
 
       // When approved, create attendance records for each working date
@@ -411,7 +424,7 @@ export class LeavesService {
           params.push(notes);
           await db.prepare(`INSERT INTO attendance (id, user_id, date, status, notes)
             VALUES ${placeholders}
-            ON CONFLICT(user_id, date) DO UPDATE SET status = CASE WHEN attendance.status IN ${PROTECTED_STATUSES} THEN attendance.status ELSE 'leave' END, notes = CASE WHEN attendance.status IN ${PROTECTED_STATUSES} THEN attendance.notes ELSE ? END, updated_at = datetime('now')`).run(...params);
+            ON DUPLICATE KEY UPDATE status = CASE WHEN attendance.status IN ${PROTECTED_STATUSES} THEN attendance.status ELSE 'leave' END, notes = CASE WHEN attendance.status IN ${PROTECTED_STATUSES} THEN attendance.notes ELSE ? END, updated_at = NOW()`).run(...params);
         }
         invalidateAnalyticsCache();
       }
@@ -453,10 +466,12 @@ export class LeavesService {
     }
 
     const result = await db.transaction(async () => {
-      await db.prepare("UPDATE leaves SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").run(id);
+      await db.prepare("UPDATE leaves SET status = 'cancelled', updated_at = NOW() WHERE id = ?").run(id);
       const dates = iterDates(leave.start_date, leave.end_date);
-      const placeholders = dates.map(() => '?').join(',');
-      await db.prepare(`UPDATE attendance SET status = 'absent', notes = NULL, updated_at = datetime('now') WHERE user_id = ? AND status = 'leave' AND date IN (${placeholders})`).run(leave.user_id, ...dates);
+      if (dates.length > 0) {
+        const placeholders = dates.map(() => '?').join(',');
+        await db.prepare(`UPDATE attendance SET status = 'absent', notes = NULL, updated_at = NOW() WHERE user_id = ? AND status = 'leave' AND date IN (${placeholders})`).run(leave.user_id, ...dates);
+      }
       invalidateAnalyticsCache();
       await db.prepare("INSERT INTO activity_logs (id, actor_id, action, entity_type, entity_id, old_values, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
         .run(uuid(), userId, 'cancel_leave', 'leave', id, JSON.stringify({ status: leave.status }), JSON.stringify({ status: 'cancelled' }), null);

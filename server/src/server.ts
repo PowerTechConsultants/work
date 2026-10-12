@@ -4,45 +4,36 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import { registerShutdown } from './lib/shutdown.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const cwd = process.cwd();
-
-// Resolve DB path BEFORE any module that calls db/index.js.
-// Use an absolute path inside the project so rebuilds never wipe data.
-if (!process.env.SQLITE_PATH && !process.env.DATABASE_PATH) {
-  process.env.SQLITE_PATH = path.join(cwd, 'data.db');
-}
-
-function minimalApp(): express.Express {
-  const app = express();
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
-  });
-  app.get('/ready', async (_req, res) => {
-    res.json({ status: 'degraded', timestamp: new Date().toISOString() });
-  });
-  return app;
-}
 
 async function startRealApp(): Promise<express.Express> {
   const { createApp } = await import('./app.js');
   return createApp();
 }
 
+function minimalApp(): express.Express {
+  const app = express();
+  app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() }));
+  app.get('/ready', async (_req, res) => res.status(503).json({ status: 'not ready', error: 'DB not connected' }));
+  app.use((_req, res) => res.status(503).json({ error: 'Service starting — DB not ready' }));
+  return app;
+}
+
 async function main() {
   let app: express.Express;
-  try {
-    app = await startRealApp();
-  } catch (e: any) {
-    console.error('[STARTUP] createApp failed, using minimal app:', e?.message ?? e);
+  try { app = await startRealApp(); } catch (e: any) {
+    console.error('[STARTUP] createApp failed, using minimal health-only:', e?.message ?? e);
     app = minimalApp();
+    // retry real app in background after 10s (once MySQL is up)
+    setTimeout(async () => { try { const real = await startRealApp(); (app as any)._router = (real as any)._router; console.log('[STARTUP] Real app hot-swapped'); } catch {} }, 10000);
   }
 
   const enableHttps = process.env.ENABLE_HTTPS === 'true';
   let server: http.Server | https.Server;
   if (enableHttps) {
-    const certDir = path.join(cwd, 'certs');
+    const certDir = path.join(here, 'certs');
     const keyPath = path.join(certDir, 'key.pem');
     const certPath = path.join(certDir, 'cert.pem');
     if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
@@ -54,16 +45,44 @@ async function main() {
     server = http.createServer(app);
   }
 
-  const port = Number(process.env.API_PORT || process.env.PORT || 4001);
+  const port = Number(process.env.API_PORT || process.env.PORT || 42780);
+  // Localhost-only by default; set HOST=0.0.0.0 to expose on the LAN.
+  const host = process.env.HOST || '127.0.0.1';
   server.on('error', (err: any) => {
     if (err?.code === 'EADDRINUSE') {
-      console.error(`[SERVER] Port ${port} is already in use`);
+      console.error(`[SERVER] Port ${port} is already in use — another WorkTracker instance is probably running.`);
     }
   });
-  server.listen(port, '0.0.0.0', () => {
-    console.log(`[SERVER] Running on http://0.0.0.0:${port}`);
+  server.listen(port, host, () => {
+    console.log(`[SERVER] Running on http://localhost:${port}`);
     console.log(`[ENV] ${process.env.NODE_ENV || 'development'}`);
   });
+
+  // Graceful shutdown: stop accepting connections, release the pool, then exit.
+  // Without this the process dies on the signal and cuts in-flight requests.
+  let shuttingDown = false;
+  const shutdown = async (reason: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[SERVER] Shutdown requested (${reason}) — closing gracefully ...`);
+    const force = setTimeout(() => { console.error('[SERVER] Forced exit after 5s'); process.exit(1); }, 5000);
+    force.unref();
+    try {
+      const { getIO } = await import('./lib/socket.js');
+      (getIO() as { close?: () => void } | null)?.close?.();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    } catch {}
+    try {
+      const { pool } = await import('./db/pool.js');
+      await pool.end();
+    } catch {}
+    clearTimeout(force);
+    console.log('[SERVER] Shutdown complete');
+    process.exit(0);
+  };
+  registerShutdown(shutdown);
+  process.on('SIGINT', () => { void shutdown('SIGINT'); });
+  process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
 
   // Graceful startup: fire-and-forget background jobs, never block the port.
   (async () => {
@@ -82,15 +101,21 @@ async function main() {
       runAnnualLeaveReset().catch((e: any) => console.error('[Leave-Reset] Startup error:', e));
     } catch {}
     try {
-      const { startAutoAbsentScheduler, stopAutoAbsentScheduler } = await import('./lib/auto-absent.js');
+      const { startAutoAbsentScheduler } = await import('./lib/auto-absent.js');
       startAutoAbsentScheduler();
-      const cleanupTimer = setInterval(async () => {
+      // Keep pooled connections warm: after sleep/hibernate a stale socket otherwise
+      // makes the first user request fail.
+      const keepaliveMs = Number(process.env.DB_KEEPALIVE_MS || 5 * 60 * 1000);
+      setInterval(async () => {
+        try { await (await import('./db/index.js')).default.prepare('SELECT 1').get(); } catch {}
+      }, keepaliveMs);
+      setInterval(async () => {
         try { await (await import('./db/index.js')).default.prepare("DELETE FROM token_blacklist WHERE expires_at <= NOW()").run(); } catch {}
         try { await (await import('./db/index.js')).default.prepare("DELETE FROM rate_limits WHERE expires_at <= NOW()").run(); } catch {}
         try { await (await import('./db/index.js')).default.prepare("DELETE FROM refresh_tokens WHERE expires_at <= NOW()").run(); } catch {}
         try { await (await import('./db/index.js')).default.prepare("DELETE FROM api_cache WHERE expires_at <= NOW()").run(); } catch {}
       }, 60 * 60 * 1000);
-      const overtimeTimer = setInterval(async () => {
+      setInterval(async () => {
         try {
           const { default: db } = await import('./db/index.js');
           const { AttendanceService } = await import('./modules/attendance/attendance.service.js');
@@ -110,7 +135,7 @@ async function main() {
           }
         } catch {}
       }, 60 * 1000);
-      setTimeout(() => { clearInterval(cleanupTimer); clearInterval(overtimeTimer); }, 30 * 60 * 1000);
+      // keep timers alive for long-running Docker/Tunnel (do not clear after 30m)
     } catch {}
     try {
       const { initializeSocket } = await import('./lib/socket.js');

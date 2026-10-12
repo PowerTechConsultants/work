@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import db, { uuid } from '../../db/index.js';
 import { AppError } from '../../lib/app-error.js';
 import { bcryptBreaker } from '../../lib/circuit-breaker.js';
@@ -89,11 +89,11 @@ export class UsersService {
       const upcomingGlobalHolidays = await db.prepare(`
         SELECT h.date, h.name FROM holidays h
         LEFT JOIN holiday_assignees ha ON ha.holiday_id = h.id
-        WHERE h.date >= date('now')
+        WHERE h.date >= CURDATE()
         GROUP BY h.id HAVING COUNT(ha.user_id) = 0
       `).all() as any[];
       if (upcomingGlobalHolidays.length > 0) {
-        const insertAtt = db.prepare(`INSERT INTO attendance (id, user_id, date, status, notes, created_at, updated_at) VALUES (?, ?, ?, 'holiday', ?, datetime('now'), datetime('now')) ON CONFLICT(user_id, date) DO NOTHING`);
+        const insertAtt = db.prepare(`INSERT INTO attendance (id, user_id, date, status, notes, created_at, updated_at) VALUES (?, ?, ?, 'holiday', ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE status = VALUES(status)`);
         const trx = await db.transaction(async () => {
           for (const h of upcomingGlobalHolidays) {
             await insertAtt.run(uuid(), id, h.date, h.name);
@@ -116,7 +116,7 @@ export class UsersService {
       delete sanitized.role;
       delete sanitized.status;
     }
-    const sets: string[] = ["updated_at = datetime('now')"];
+    const sets: string[] = ["updated_at = NOW()"];
     const params: any[] = [];
     for (const [k, v] of Object.entries(sanitized)) {
       if (v === undefined || !allowedFields.includes(k)) continue;

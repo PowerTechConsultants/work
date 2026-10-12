@@ -20,20 +20,31 @@ export default defineConfig({
     },
   },
   build: {
-    // Keep 'out' so server static-serve, packager and FTP deploy keep working.
-    outDir: 'out',
-    chunkSizeWarningLimit: 1600,
+    outDir: 'dist',
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/xlsx')) return 'xlsx';
+          if (id.includes('node_modules/jspdf')) return 'jspdf';
+          if (id.includes('node_modules/docx')) return 'docx';
+          if (id.includes('node_modules/recharts')) return 'recharts';
+        },
+      },
+    },
   },
   server: {
-    port: 3000,
+    // The stable app port. In run mode Express serves the built app on 42780;
+    // in dev mode Vite takes 42780 and proxies the API to 42781.
+    port: Number(process.env.WEB_PORT || 42780),
+    strictPort: true,
     https: httpsOptions,
     // Local dev parity with the old Next.js rewrites: forward API + socket
-    // traffic to the Express server. VITE_API_PORT overrides the target port
-    // (E2E uses 4001 to avoid clashing with other local services on 4000).
+    // traffic to the Express server. VITE_API_PORT overrides the target port.
     // Production static hosting calls the absolute VITE_API_URL instead.
     proxy: {
-      '/api': `http://localhost:${process.env.VITE_API_PORT || '4001'}`,
-      '/socket.io': { target: `ws://localhost:${process.env.VITE_API_PORT || '4001'}`, ws: true },
+      '/api': `http://localhost:${process.env.VITE_API_PORT || '42781'}`,
+      '/socket.io': { target: `ws://localhost:${process.env.VITE_API_PORT || '42781'}`, ws: true },
     },
   },
 });

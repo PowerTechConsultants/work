@@ -33,12 +33,12 @@ export class NotificationsService {
   static async markRead(id: string, userId: string) {
     const n = await db.prepare('SELECT id FROM notifications WHERE id = ? AND recipient_id = ?').get(id, userId);
     if (!n) throw new AppError(404, 'Notification not found');
-    await db.prepare("UPDATE notifications SET read_at = datetime('now') WHERE id = ?").run(id);
+    await db.prepare("UPDATE notifications SET read_at = NOW() WHERE id = ?").run(id);
     return { message: 'Marked as read' };
   }
 
   static async markAllRead(userId: string) {
-    await db.prepare("UPDATE notifications SET read_at = datetime('now') WHERE recipient_id = ? AND read_at IS NULL").run(userId);
+    await db.prepare("UPDATE notifications SET read_at = NOW() WHERE recipient_id = ? AND read_at IS NULL").run(userId);
     return { message: 'All notifications marked as read' };
   }
 

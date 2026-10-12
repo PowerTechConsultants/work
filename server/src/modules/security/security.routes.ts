@@ -11,7 +11,7 @@ const router = Router();
 router.use(authenticate);
 
 const updatePolicySchema = z.object({
-  minLength: z.number().int().min(6).max(128).optional(),
+  minLength: z.number().int().min(12).max(128).optional(),
   requireUppercase: z.boolean().optional(),
   requireLowercase: z.boolean().optional(),
   requireNumber: z.boolean().optional(),

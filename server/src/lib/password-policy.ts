@@ -69,7 +69,7 @@ export async function checkPasswordHistory(userId: string, newPassword: string, 
     'SELECT password_hash FROM password_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?'
   ).all(userId, p.historyCount) as any[];
 
-  const bcrypt = (await import('bcryptjs')).default;
+  const bcrypt = (await import('bcrypt')).default;
   for (const row of rows) {
     const matches = await bcrypt.compare(newPassword, row.password_hash);
     if (matches) return false;
@@ -130,7 +130,7 @@ export async function updatePasswordPolicy(updates: Partial<PasswordPolicy>): Pr
       `UPDATE password_policies SET
         min_length = ?, require_uppercase = ?, require_lowercase = ?,
         require_number = ?, require_special = ?, max_age_days = ?,
-        history_count = ?, updated_at = datetime('now')
+        history_count = ?, updated_at = NOW()
       WHERE id = ?`
     ).run(
       merged.minLength,

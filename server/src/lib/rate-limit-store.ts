@@ -48,8 +48,9 @@ export class RateLimitStore {
       const row = await db.prepare('SELECT hits, expires_at FROM rate_limits WHERE `key` = ?').get(pk) as any;
       return { totalHits: row?.hits ?? 1, resetTime: new Date(row?.expires_at ?? resetStr) };
     } catch (err) {
-      console.error('[RATE-LIMIT] Store unavailable, failing open:', err);
-      return { totalHits: 1, resetTime: new Date(Date.now() + this.windowMs) };
+      console.error('[RATE-LIMIT] Store unavailable, failing closed:', err);
+      // Fail-closed: block request when DB is down (do not allow unlimited brute-force)
+      return { totalHits: 999999, resetTime: new Date(Date.now() + this.windowMs) };
     }
   }
 

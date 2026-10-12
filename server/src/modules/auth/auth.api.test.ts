@@ -29,6 +29,9 @@ describe('POST /api/v1/auth/login', () => {
   it('sends rate-limit headers on the login route', async () => {
     const res = await request(app).post('/api/v1/auth/login').send({ email: 'x@example.com', password: 'y' });
     expect(res.headers['ratelimit-limit']).toBeDefined();
+    // login limiter: 15 minute window, max 50 outside production (auth.routes.ts:34-35)
+    expect(res.headers['ratelimit-limit']).toBe('50');
+    expect(Number(res.headers['ratelimit-remaining'])).toBeGreaterThanOrEqual(0);
   });
 
   it('throttles brute-force logins with 429', async () => {

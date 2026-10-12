@@ -23,17 +23,17 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "4001:4001"
+      - "42780:42780"
     environment:
       NODE_ENV: production
-      PORT: 4001
+      PORT: 42780
       MYSQL_HOST: db
       MYSQL_PORT: "3306"
       MYSQL_USER: root
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-hr}
       DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@db:3306/${MYSQL_DATABASE:-hr}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:42780}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET must be set (>=32 chars)}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET must be set (>=32 chars)}
       TRUST_PROXY: ${TRUST_PROXY:-loopback}
@@ -43,12 +43,12 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
       SMTP_FROM: ${SMTP_FROM}
-      APP_URL: ${APP_URL:-http://localhost:3000}
+      APP_URL: ${APP_URL:-http://localhost:42780}
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4001/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:42780/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -60,9 +60,9 @@ services:
       context: ../web
       dockerfile: Dockerfile
       args:
-        API_URL: http://backend:4001
+        API_URL: http://backend:42780
     ports:
-      - "3000:3000"
+      - "42781:42780"
     environment:
       NODE_ENV: production
     depends_on:

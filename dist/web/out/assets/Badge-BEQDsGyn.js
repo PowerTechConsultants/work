@@ -1,1 +1,0 @@
-import"./rolldown-runtime-Dd_uD5pT.js";import{n as e,t}from"./jsx-runtime-BpzPEenQ.js";import{n}from"./DashboardLayout-BL6xqeVM.js";e();var r=t();function i({children:e,className:t}){return(0,r.jsx)(`span`,{className:n(`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium border whitespace-nowrap`,t),children:e})}export{i as t};

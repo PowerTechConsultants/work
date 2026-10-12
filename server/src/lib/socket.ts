@@ -13,8 +13,11 @@ const reconnectTracker = new Map<string, { count: number; firstSeen: number; las
 
 const MAX_CONNECTIONS_PER_USER = 5;
 const MAX_CONNECTIONS_PER_IP = 20;
-const HEARTBEAT_INTERVAL = 30000;
-const HEARTBEAT_TIMEOUT = 15000;
+const HEARTBEAT_INTERVAL = 25000;
+// 15s was too tight: a backgrounded browser tab, a Windows sleep/resume or a slow moment
+// (for example while the daily backup runs) missed the pong and the socket was dropped
+// with "ping timeout" while the client was still perfectly healthy.
+const HEARTBEAT_TIMEOUT = 45000;
 const SUSPICIOUS_RECONNECT_THRESHOLD = 10;
 const SUSPICIOUS_WINDOW_MS = 5 * 60 * 1000;
 

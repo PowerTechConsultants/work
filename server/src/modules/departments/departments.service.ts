@@ -28,7 +28,7 @@ export class DepartmentsService {
 
   static async update(id: string, input: any) {
     await this.getById(id);
-    const sets = ["updated_at = datetime('now')"]; const params: any[] = [];
+    const sets = ["updated_at = NOW()"]; const params: any[] = [];
     if (input.name !== undefined) {
       const existing = await db.prepare('SELECT id FROM departments WHERE name = ? AND id != ?').get(input.name, id);
       if (existing) throw new AppError(409, 'Name already exists');

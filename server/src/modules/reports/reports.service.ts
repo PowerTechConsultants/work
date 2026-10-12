@@ -60,7 +60,7 @@ export class ReportsService {
     if (!report) throw new AppError(404, 'Report not found');
     if (role !== 'director' && role !== 'hr' && report.user_id !== userId) throw new AppError(403, 'Cannot update others report');
     if (report.status !== 'draft') throw new AppError(409, 'Only draft reports can be updated');
-    const sets = ["updated_at = datetime('now')"]; const params: any[] = [];
+    const sets = ["updated_at = NOW()"]; const params: any[] = [];
     if (input.workCompletedToday !== undefined) { sets.push('work_completed_today = ?'); params.push(input.workCompletedToday); }
     if (input.currentProgress !== undefined) { sets.push('current_progress = ?'); params.push(input.currentProgress); }
     if (input.pendingWork !== undefined) { sets.push('pending_work = ?'); params.push(input.pendingWork); }
@@ -78,7 +78,7 @@ export class ReportsService {
       if (!report) throw new AppError(404, 'Report not found');
       if (report.user_id !== userId) throw new AppError(403, 'Cannot submit others report');
       if (report.status !== 'draft') throw new AppError(409, 'Only draft reports can be submitted');
-      await db.prepare("UPDATE work_reports SET status = 'submitted', updated_at = datetime('now') WHERE id = ?").run(id);
+      await db.prepare("UPDATE work_reports SET status = 'submitted', updated_at = NOW() WHERE id = ?").run(id);
       const admins = await db.prepare("SELECT id FROM users WHERE role IN ('director', 'hr')").all() as any[];
       const insertNotif = db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)');
       for (const a of admins) {
@@ -96,7 +96,7 @@ export class ReportsService {
       if (!report) throw new AppError(404, 'Report not found');
       if (report.status !== 'submitted') throw new AppError(409, 'Report not in reviewable state');
       if (report.user_id === reviewedById) throw new AppError(403, 'Cannot review your own report');
-      const upd = await db.prepare("UPDATE work_reports SET status = ?, feedback = ?, reviewed_by_id = ?, reviewed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'submitted'")
+      const upd = await db.prepare("UPDATE work_reports SET status = ?, feedback = ?, reviewed_by_id = ?, reviewed_at = NOW(), updated_at = NOW() WHERE id = ? AND status = 'submitted'")
         .run(status, comments ?? null, reviewedById, id);
       if (upd.changes === 0) throw new AppError(409, 'Already reviewed');
       await db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -127,7 +127,7 @@ export class ReportsService {
         COUNT(wr.id) as total_reports,
         MAX(wr.date) as latest_date,
         MAX(CASE WHEN wr.date = sub.max_date THEN wr.status END) as latest_status,
-        ROUND(AVG(CASE WHEN wr.date >= date('now', '-30 day') THEN wr.current_progress END), 0) as avg_progress_30d
+        ROUND(AVG(CASE WHEN wr.date >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN wr.current_progress END), 0) as avg_progress_30d
       FROM users u
       LEFT JOIN work_reports wr ON wr.user_id = u.id
       LEFT JOIN (

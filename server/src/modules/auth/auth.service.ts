@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import db, { uuid } from '../../db/index.js';
 import { config } from '../../lib/config.js';
@@ -125,7 +125,7 @@ export class AuthService {
 
     // Atomic increment to avoid TOCTOU race condition
     if (user.failed_login_attempts + 1 >= MAX_LOGIN_ATTEMPTS) {
-      await db.prepare("UPDATE users SET failed_login_attempts = failed_login_attempts + 1, locked_until = datetime('now', '+' || ? || ' minutes') WHERE id = ?")
+      await db.prepare("UPDATE users SET failed_login_attempts = failed_login_attempts + 1, locked_until = DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id = ?")
         .run(LOCKOUT_MINUTES, user.id);
     } else {
       await db.prepare('UPDATE users SET failed_login_attempts = failed_login_attempts + 1 WHERE id = ?').run(user.id);
@@ -143,12 +143,12 @@ export class AuthService {
 
   private static async issueSession(user: any, userAgent?: string, ip?: string) {
     return await db.transaction(async () => {
-      await db.prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = datetime('now') WHERE id = ?").run(user.id);
+      await db.prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW() WHERE id = ?").run(user.id);
 
       const tokenId = uuid();
       const rawRefresh = signRefreshToken(user.id, tokenId);
       const tokenHash = hashToken(rawRefresh);
-      await db.prepare(`INSERT INTO refresh_tokens (id, user_id, token_hash, user_agent, ip_address, expires_at) VALUES (?, ?, ?, ?, ?, datetime('now', '+' || ? || ' days'))`)
+      await db.prepare(`INSERT INTO refresh_tokens (id, user_id, token_hash, user_agent, ip_address, expires_at) VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))`)
         .run(tokenId, user.id, tokenHash, userAgent ?? null, ip ?? null, config.jwtRefreshTtlDays);
 
       const accessToken = signAccessToken(user.id, user.email, user.role);
@@ -194,7 +194,7 @@ export class AuthService {
       throw new AppError(401, 'Current password is incorrect');
     }
 
-    await db.prepare("UPDATE users SET two_factor_enabled = 0, two_factor_secret = NULL, updated_at = datetime('now') WHERE id = ?").run(userId);
+    await db.prepare("UPDATE users SET two_factor_enabled = 0, two_factor_secret = NULL, updated_at = NOW() WHERE id = ?").run(userId);
     return { enabled: false };
   }
 
@@ -236,7 +236,7 @@ export class AuthService {
       // Replay of an already-revoked token: revoke every session for this user.
       await db.transaction(async () => {
         await revokeUserTokens(payload.sub);
-        await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(payload.sub);
+await db.prepare("UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?").run(payload.sub);
       })();
       throw new AppError(401, 'Refresh token revoked');
     }
@@ -248,12 +248,12 @@ export class AuthService {
       const current = await db.prepare('SELECT revoked_at FROM refresh_tokens WHERE id = ? FOR UPDATE').get(stored.id) as any;
       if (current?.revoked_at) throw new AppError(401, 'Refresh token already used');
 
-      await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE id = ?").run(stored.id);
+      await db.prepare("UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = ?").run(stored.id);
 
       const newTokenId = uuid();
       const newRawRefresh = signRefreshToken(payload.sub, newTokenId);
       const newHash = hashToken(newRawRefresh);
-      await db.prepare(`INSERT INTO refresh_tokens (id, user_id, token_hash, user_agent, ip_address, expires_at) VALUES (?, ?, ?, ?, ?, datetime('now', '+' || ? || ' days'))`)
+      await db.prepare(`INSERT INTO refresh_tokens (id, user_id, token_hash, user_agent, ip_address, expires_at) VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))`)
         .run(newTokenId, payload.sub, newHash, stored.user_agent, stored.ip_address, config.jwtRefreshTtlDays);
 
       const user = await db.prepare('SELECT id, email, role, status FROM users WHERE id = ?').get(payload.sub) as any;
@@ -267,7 +267,7 @@ export class AuthService {
   static async logout(refreshToken: string) {
     const payload = verifyRefreshToken(refreshToken);
     await revokeUserTokens(payload.sub);
-    await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(payload.sub);
+    await db.prepare("UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?").run(payload.sub);
   }
 
   static async changePassword(userId: string, input: { currentPassword: string; newPassword: string }) {
@@ -289,10 +289,10 @@ export class AuthService {
     }
 
     await db.transaction(async () => {
-      await db.prepare("UPDATE users SET password_hash = ?, failed_login_attempts = 0, locked_until = NULL, updated_at = datetime('now') WHERE id = ?").run(newHash, userId);
+      await db.prepare("UPDATE users SET password_hash = ?, failed_login_attempts = 0, locked_until = NULL, updated_at = NOW() WHERE id = ?").run(newHash, userId);
       await recordPassword(userId, newHash);
       await revokeUserTokens(userId);
-      await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(userId);
+      await db.prepare("UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?").run(userId);
     })();
   }
 
@@ -327,14 +327,14 @@ export class AuthService {
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const id = uuid();
 
-    await db.prepare(`INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, datetime('now', '+1 hour'))`)
+    await db.prepare(`INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 1 HOUR))`)
       .run(id, user.id, tokenHash);
 
     const sent = await sendPasswordResetEmail(user.email, rawToken);
     if (!sent) {
       await db.prepare('DELETE FROM password_reset_tokens WHERE id = ?').run(id);
       if (config.nodeEnv !== 'production') {
-        const base = process.env.APP_URL ?? 'http://localhost:3000';
+        const base = process.env.APP_URL ?? 'http://localhost:42780';
         console.log(`[RESET] Dev-only password reset link for ${user.email}: ${base}/reset-password?token=${rawToken}`);
       }
     }
@@ -344,7 +344,7 @@ export class AuthService {
 
   static async resetPassword(token: string, newPassword: string) {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const row = await db.prepare("SELECT * FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')").get(tokenHash) as any;
+    const row = await db.prepare("SELECT * FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW()").get(tokenHash) as any;
     if (!row) throw new AppError(400, 'Invalid or expired reset token');
 
     const policy = await getPasswordPolicy();
@@ -361,10 +361,10 @@ export class AuthService {
     }
 
     await db.transaction(async () => {
-      await db.prepare("UPDATE users SET password_hash = ?, failed_login_attempts = 0, locked_until = NULL, updated_at = datetime('now') WHERE id = ?").run(passwordHash, row.user_id);
+      await db.prepare("UPDATE users SET password_hash = ?, failed_login_attempts = 0, locked_until = NULL, updated_at = NOW() WHERE id = ?").run(passwordHash, row.user_id);
       await recordPassword(row.user_id, passwordHash);
-      await db.prepare("UPDATE password_reset_tokens SET used_at = datetime('now') WHERE id = ?").run(row.id);
-      await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(row.user_id);
+      await db.prepare("UPDATE password_reset_tokens SET used_at = NOW() WHERE id = ?").run(row.id);
+      await db.prepare("UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?").run(row.user_id);
       await revokeUserTokens(row.user_id);
     })();
   }

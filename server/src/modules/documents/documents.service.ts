@@ -265,7 +265,7 @@ export class DocumentsService {
         dn = `WT-${code}-${year}-${String(seq + 1).padStart(4, '0')}`;
       }
 
-      await db.prepare("UPDATE document_requests SET status = 'issued', fields = ?, doc_number = ?, issued_by_id = ?, issued_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
+      await db.prepare("UPDATE document_requests SET status = 'issued', fields = ?, doc_number = ?, issued_by_id = ?, issued_at = NOW(), updated_at = NOW() WHERE id = ?")
         .run(JSON.stringify(fields), dn, reviewedById, id);
       return { doc: mapDoc(await db.prepare(`${SELECT} WHERE d.id = ?`).get(id)), docNumber: dn || 'N/A' };
     })();
@@ -296,7 +296,7 @@ export class DocumentsService {
     if (!doc) throw new AppError(404, 'Document request not found');
     if (doc.status !== 'pending') throw new AppError(409, `Only pending requests can be rejected (current status: ${doc.status})`);
 
-    await db.prepare("UPDATE document_requests SET status = 'rejected', reject_reason = ?, updated_at = datetime('now') WHERE id = ?")
+    await db.prepare("UPDATE document_requests SET status = 'rejected', reject_reason = ?, updated_at = NOW() WHERE id = ?")
       .run(reason ?? null, id);
     const updated = mapDoc(await db.prepare(`${SELECT} WHERE d.id = ?`).get(id));
 
@@ -318,7 +318,7 @@ export class DocumentsService {
     if (!doc) throw new AppError(404, 'Document request not found');
     if (doc.user_id !== userId && !isAdminRole(role)) throw new AppError(403, 'Forbidden');
     if (doc.status !== 'pending') throw new AppError(409, 'Only pending requests can be cancelled');
-    await db.prepare("UPDATE document_requests SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").run(id);
+    await db.prepare("UPDATE document_requests SET status = 'cancelled', updated_at = NOW() WHERE id = ?").run(id);
     return mapDoc(await db.prepare(`${SELECT} WHERE d.id = ?`).get(id));
   }
 

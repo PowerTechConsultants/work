@@ -15,10 +15,12 @@
 /test-results/
 /playwright-report/
 
-# next.js
+# next.js (legacy, kept for compat)
 /.next/
 /out/
 !/out/.gitkeep
+/dist/
+!/dist/.gitkeep
 
 # production
 /build

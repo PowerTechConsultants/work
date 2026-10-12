@@ -26,7 +26,7 @@ const DEFAULT_MAXIMUM_AGE = 0;
 const DEFAULT_MAX_ATTEMPTS = 3;
 
 interface LocationError {
-  code: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' | 'UNKNOWN';
+  code: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' | 'sNKNOWN';
   message: string;
 }
 
@@ -49,7 +49,7 @@ export function captureLocation(options: CaptureOptions = {}): Promise<CaptureRe
       const isLanIp = /^\d+\.\d+\.\d+\.\d+$/.test(host) || host.endsWith('.local');
       let msg = 'Location requires HTTPS. Please use https:// or localhost.';
       if (isLanIp && !isLocalhost) {
-        msg = `Location blocked: ${host} is not a secure context. Use http://localhost:3000 on this device, or run "npm run dev:https" and trust the self-signed cert (web/certs/) for LAN HTTPS.`;
+        msg = `Location blocked: ${host} is not a secure context. Use http://localhost:42780 on this device, or run "npm run dev:https" and trust the self-signed cert (web/certs/) for LAN HTTPS.`;
       }
       console.warn('[Location] Not a secure context —', host, isLanIp ? '(LAN IP)' : '');
       resolve({ location: null, error: { code: 'PERMISSION_DENIED', message: msg } });
@@ -57,7 +57,7 @@ export function captureLocation(options: CaptureOptions = {}): Promise<CaptureRe
     }
     if (typeof window === 'undefined' || !('geolocation' in navigator)) {
       console.warn('[Location] Geolocation not available (server or unsupported browser)');
-      resolve({ location: null, error: { code: 'UNKNOWN', message: 'Geolocation not supported' } });
+      resolve({ location: null, error: { code: 'sNKNOWN', message: 'Geolocation not supported' } });
       return;
     }
 
@@ -100,7 +100,7 @@ export function captureLocation(options: CaptureOptions = {}): Promise<CaptureRe
         },
         (err) => {
           const locationError: LocationError = {
-            code: 'UNKNOWN',
+            code: 'sNKNOWN',
             message: err.message,
           };
 
@@ -149,7 +149,7 @@ export function captureLocation(options: CaptureOptions = {}): Promise<CaptureRe
 
 /** Helper to get a user-friendly error message from a location result */
 export function getLocationErrorMessage(err: unknown): string {
-  if (!err) return 'Unknown location error';
+  if (!err) return 'snknown location error';
   if (typeof err === 'string') return err;
   if (err instanceof Error) return err.message;
   const e = err as LocationError;

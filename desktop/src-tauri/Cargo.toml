@@ -1,0 +1,20 @@
+[package]
+name = "worktracker-desktop"
+version = "1.0.0"
+edition = "2021"
+authors = ["Power Tech Consultants"]
+description = "WorkTracker Desktop - HR Employee Work Tracker"
+repository = "https://github.com/PowerTechConsultants/Work-Tracker"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = ["shell-open"] }
+tauri-plugin-shell = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+default = [ "custom-protocol" ]
+custom-protocol = [ "tauri/custom-protocol" ]

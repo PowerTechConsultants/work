@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import db, { uuid } from './index.js';
 
 export async function ensureAdminBootstrap() {

@@ -59,7 +59,7 @@ export class PlansService {
     if (!plan) throw new AppError(404, 'Plan not found');
     if (role !== 'director' && role !== 'hr' && plan.user_id !== userId) throw new AppError(403, 'Cannot update others plan');
     if (plan.status !== 'draft') throw new AppError(409, 'Only draft plans can be updated');
-    await db.prepare("UPDATE work_plans SET planned_work = ?, priority = ?, estimated_hours = ?, updated_at = datetime('now') WHERE id = ?")
+    await db.prepare("UPDATE work_plans SET planned_work = ?, priority = ?, estimated_hours = ?, updated_at = NOW() WHERE id = ?")
       .run(input.plannedWork ?? plan.planned_work, input.priority ?? plan.priority, input.estimatedHours ?? plan.estimated_hours, id);
     await cache.delContaining('/api/v1/plans');
     return mapPlan(await db.prepare('SELECT * FROM work_plans WHERE id = ?').get(id));
@@ -71,7 +71,7 @@ export class PlansService {
       if (!plan) throw new AppError(404, 'Plan not found');
       if (plan.user_id !== userId) throw new AppError(403, 'Cannot submit others plan');
       if (plan.status !== 'draft') throw new AppError(409, 'Only draft plans can be submitted');
-      await db.prepare("UPDATE work_plans SET status = 'submitted', updated_at = datetime('now') WHERE id = ?").run(id);
+      await db.prepare("UPDATE work_plans SET status = 'submitted', updated_at = NOW() WHERE id = ?").run(id);
       const admins = await db.prepare("SELECT id FROM users WHERE role IN ('director', 'hr')").all() as any[];
       const insertNotif = db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)');
       for (const a of admins) {
@@ -89,7 +89,7 @@ export class PlansService {
       if (!plan) throw new AppError(404, 'Plan not found');
       if (plan.status !== 'submitted') throw new AppError(409, 'Plan not in reviewable state');
       if (plan.user_id === reviewedById) throw new AppError(403, 'Cannot review your own plan');
-      const upd = await db.prepare("UPDATE work_plans SET status = ?, review_comment = ?, reviewed_by_id = ?, reviewed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'submitted'")
+      const upd = await db.prepare("UPDATE work_plans SET status = ?, review_comment = ?, reviewed_by_id = ?, reviewed_at = NOW(), updated_at = NOW() WHERE id = ? AND status = 'submitted'")
         .run(status, comments ?? null, reviewedById, id);
       if (upd.changes === 0) throw new AppError(409, 'Already reviewed');
       await db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')

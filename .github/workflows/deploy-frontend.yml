@@ -11,7 +11,7 @@ on:
 
 jobs:
   deploy-frontend:
-    name: Build web/out and FTP to public_html
+    name: Build web/dist and FTP to public_html
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,15 +34,15 @@ jobs:
           NEXT_PUBLIC_API_URL: https://power-tech.group
 
       # For Hostinger Node single-process (Other preset, Entry server.js, Output dist), the build on Hostinger itself
-      # already serves web/out via Express (server/src/app.ts:221). FTP is only needed if you use Hostinger *Web Hosting* (Apache public_html) separately.
+      # already serves web/dist via Express (server/src/app.ts:221). FTP is only needed if you use Hostinger *Web Hosting* (Apache public_html) separately.
       # Keep FTP disabled by default — Hostinger Node will auto-pull from GitHub and run `npm run build` itself.
-      - name: FTP upload web/out to public_html (skip for Node single-process)
+      - name: FTP upload web/dist to public_html (skip for Node single-process)
         if: ${{ false }}
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_HOST }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./web/out/
+          local-dir: ./web/dist/
           server-dir: ${{ secrets.FTP_SERVER_DIR }}
           dangerous-clean-slate: false
